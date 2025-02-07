@@ -1,5 +1,6 @@
 import io
 import logging
+import re
 
 from odoo import _, api, models
 from odoo.exceptions import UserError
@@ -24,6 +25,22 @@ class ProCreditStatementNumber(tags.Tag):
     pattern = r"""
     (?P<statement_number>[\d/]{1,10})  # 10n + /
     $"""
+
+
+class ProCreditCustomerReference(object):
+    pattern = r"""(ПОЛУЧАТЕЛ:|СМЕТКА:|BIC:|КУРС:)"""
+    split_data = None
+    bank_swift_id = "PRCBBGSF"
+
+    def __init__(self, tag_data):
+        split_data = re.split(self.pattern, tag_data)
+        self.split_data = [x.strip() for x in split_data if x != ""]
+
+    def get_version(self):
+        return self.bank_swift_id
+
+    def get_data(self):
+        return dict(zip(self.split_data[::2], self.split_data[1::2]))
 
 
 class AccountStatementImport(models.TransientModel):
@@ -55,14 +72,15 @@ class AccountStatementImport(models.TransientModel):
                 res.update(
                     {
                         "22": detail_row_22,
+                        "pro_credit_customer_data": ProCreditCustomerReference(detail_row_22).get_data()
                     }
                 )
-                if len(detail_row_22.split(":")) > 1:
-                    detail_row_22_customer = detail_row_22.split(":")
-                    detail_row_22_customer_data = dict(
-                        zip(detail_row_22_customer[::2], detail_row_22_customer[1::2])
-                    )
-                    _logger.debug(f"Customer data: {detail_row_22_customer_data}")
+                # if len(detail_row_22.split(":")) > 1:
+                #     detail_row_22_customer = detail_row_22.split(":")
+                #     detail_row_22_customer_data = dict(
+                #         zip(detail_row_22_customer[::2], detail_row_22_customer[1::2])
+                #     )
+                #     _logger.debug(f"Customer data: {detail_row_22_customer_data}")
             elif detail.startswith("30"):
                 res.update(
                     {
@@ -95,6 +113,15 @@ class AccountStatementImport(models.TransientModel):
         transaction_details = transaction["transaction_details"]
         detail_data = self._get_detail_data(transaction_details)
 
+        account_number = detail_data.get("31", "")
+        partner_name = detail_data.get("33", "")
+        if detail_data.get("32"):
+            partner_name = detail_data.get("32", partner_name)
+
+        if detail_data.get("pro_credit_customer_data"):
+            partner_name = detail_data.get("pro_credit_customer_data").get('ПОЛУЧАТЕЛ:', partner_name)
+            account_number = detail_data.get("pro_credit_customer_data").get('СМЕТКА:', account_number)
+
         vals = {
             "date": transaction["date"],
             "payment_ref": detail_data.get(
@@ -103,8 +130,8 @@ class AccountStatementImport(models.TransientModel):
             "amount": float(transaction["amount"].amount),
             "unique_import_id": f"{transaction['id']}"
             f"-{transaction['customer_reference']}",
-            "account_number": detail_data.get("31", ""),
-            "partner_name": detail_data.get("33", detail_data.get("32", "")),
+            "account_number": account_number,
+            "partner_name": partner_name,
         }
         return vals
 
