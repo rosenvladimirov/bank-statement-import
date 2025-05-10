@@ -4,6 +4,7 @@ import re
 
 from odoo import _, api, models
 from odoo.exceptions import UserError
+from .bank_custom_tags import ProCreditCustomerReference
 
 _logger = logging.getLogger(__name__)
 
@@ -15,56 +16,40 @@ except ImportError:
     mt940 = None
 
 
-class ProCreditStatementNumber(tags.Tag):
-    """Statement number / sequence number
-
-    Pattern: 10n + /
-    """
-
-    id = 28
-    pattern = r"""
-    (?P<statement_number>[\d/]{1,10})  # 10n + /
-    $"""
-
-
-class ProCreditCustomerReference(object):
-    pattern = r"""(ПОЛУЧАТЕЛ:|СМЕТКА:|BIC:|КУРС:)"""
-    split_data = None
-    bank_swift_id = "PRCBBGSF"
-
-    def __init__(self, tag_data):
-        split_data = re.split(self.pattern, tag_data)
-        self.split_data = [x.strip() for x in split_data if x != ""]
-
-    def get_version(self):
-        return self.bank_swift_id
-
-    def get_data(self):
-        return dict(zip(self.split_data[::2], self.split_data[1::2]))
-
-
 class AccountStatementImport(models.TransientModel):
     _inherit = "account.statement.import"
 
     @api.model
     def _check_mt940(self, data_file):
-        if not mt940:
+        if not data_file:
             return []
+
         try:
-            # tag_parser = ProCreditStatementNumber()
-            # mt940_parser = mt940.models.Transactions(tags={tag_parser.id: tag_parser})
-            data = io.BytesIO(data_file).read().decode("utf-8")
-            # mt940_transactions = mt940_parser.parse(data)
-            mt940_transactions = mt940.parse(data)
-        except Exception as e:
-            _logger.debug(e)
+            for encoding in ["windows-1251", "iso-8859-5", "utf-8"]:
+                try:
+                    _logger.debug(f"Опит за декодиране с {encoding}")
+                    data = io.BytesIO(data_file).read().decode(encoding)
+                    # Създаваме инстанция на MT940 с декодираните данни
+                    return mt940.parse(data)
+
+                except UnicodeDecodeError:
+                    continue
+                except Exception as e:
+                    _logger.error(f"Грешка при парсване на MT940: {str(e)}")
+                    return []
+
+            _logger.error("Неуспешно декодиране с всички опитани кодировки")
             return []
-        return mt940_transactions
+
+        except Exception as e:
+            _logger.error(f"Обща грешка при обработка на MT940: {str(e)}")
+            return []
 
     @api.model
     def _get_detail_data(self, transaction_details):
         res = {}
         for detail in transaction_details.split("+"):
+            _logger.info(f"Detail: {detail}")
             if detail.startswith("21"):
                 res.update({"21": detail.replace("21", "")})
             elif detail.startswith("22"):
@@ -137,6 +122,7 @@ class AccountStatementImport(models.TransientModel):
 
     def _parse_file(self, data_file):
         mt940_transactions = self._check_mt940(data_file)
+        _logger.info(f"MT940 transactions: {mt940_transactions}")
         if not mt940_transactions:
             return super()._parse_file(data_file)
 
@@ -167,7 +153,7 @@ class AccountStatementImport(models.TransientModel):
             result.append(
                 (
                     mt940_transactions_data["final_opening_balance"].amount.currency,
-                    mt940_transactions_data["sequence_number"],
+                    mt940_transactions_data["account_identification"],
                     [vals_bank_statement],
                 )
             )
