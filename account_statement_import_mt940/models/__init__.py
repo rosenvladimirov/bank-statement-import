@@ -1,5 +1,6 @@
 import re
 import mt940.tags
+
 mt940.tags.StatementNumber.pattern = r"""
     (?P<statement_number>\d+)  # 8n
     (?:/?(?P<sequence_number>\d{1,6}))?  # [/8n]
