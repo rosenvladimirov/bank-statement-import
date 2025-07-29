@@ -1,10 +1,12 @@
 import re
 import mt940.tags
 
-mt940.tags.StatementNumber.pattern = r"""
-    (?P<statement_number>\d+)  # 8n
-    (?:/?(?P<sequence_number>\d{1,6}))?  # [/8n]
+mt940.tags.StatementNumber.pattern = """
+    (?P<statement_number>\d+)
+    (?:/?(?P<sequence_number>\d{1,6})|
+    -(?P<alt_sequence_number>\d{1,6}))?
     $"""
+
 
 class Tag(object):
     def parse(self, transactions, value):

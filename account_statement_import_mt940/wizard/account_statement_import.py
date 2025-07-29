@@ -25,7 +25,7 @@ class AccountStatementImport(models.TransientModel):
             return []
 
         try:
-            for encoding in ["windows-1251", "iso-8859-5", "utf-8"]:
+            for encoding in ["utf-8", "windows-1251", "iso-8859-5"]:
                 try:
                     _logger.debug(f"Опит за декодиране с {encoding}")
                     data = io.BytesIO(data_file).read().decode(encoding)
