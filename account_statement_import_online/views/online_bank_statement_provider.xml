@@ -101,7 +101,7 @@
     <menuitem
         id="online_bank_statement_provider_menu"
         action="online_bank_statement_provider_action"
-        parent="account.account_banks_menu"
+        parent="account.menu_finance_configuration"
         sequence="100"
     />
 </odoo>
