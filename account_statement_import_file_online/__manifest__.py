@@ -2,7 +2,7 @@
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 {
     "name": "Bank Statement Import: File → Online provider",
-    "version": "18.0.1.1.0",
+    "version": "18.0.1.2.0",
     "category": "Banking addons",
     "license": "AGPL-3",
     "summary": "On the file-import wizard, when the journal has an online "

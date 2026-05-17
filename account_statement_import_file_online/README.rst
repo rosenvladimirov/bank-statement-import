@@ -30,10 +30,15 @@ Behaviour
   ``l10n_bg_provider_id`` (resolved from the ``journal_id`` context
   key the dashboard button sets).
 * ``import_file_button()`` is overridden: with a provider → pull from
-  it (period mirrors the OCA scheduler ``_scheduled_pull``: from
-  ``last_successful_run`` — or one ``_get_next_run_period()`` back —
-  up to *now*); without a provider → unchanged file import (a clear
-  error is raised if no file was selected).
+  it; without a provider → unchanged file import (a clear error is
+  raised if no file was selected).
+* Pull period: **first press for the journal** (no statements yet) →
+  *backfill* from Jan 1 of the current year with the opening/closing
+  balance anchor flags set; **subsequent presses** → *incremental*
+  from the latest statement onward.  The backfill-vs-incremental
+  decision is by statement presence, not ``last_successful_run``
+  (OCA only writes the latter on the scheduled cron, never on a
+  manual pull) — the same signal the InfoPay bridge uses to anchor.
 * ``statement_file`` hard ``required`` is relaxed (validated
   contextually) so the form can be submitted with no file when a
   provider is used.
@@ -43,10 +48,11 @@ Notes
 
 The provider pull goes through ``provider._pull``; when ``queue_job``
 is installed the InfoPay bridge offloads it to a background job, so
-the wizard returns immediately and a toast reports progress.  This
-path does not set the provider's *populate opening/closing balance*
-opt-in flags — use the provider's own pull wizard when an anchored
-opening balance is required.
+the wizard returns immediately and a toast reports progress.  On the
+initial backfill the *populate opening/closing balance* flags are set
+so the statement chain is anchored to the real balance; they survive
+job serialization via the bridge's
+``_job_prepare_context_before_enqueue_keys``.
 
 Credits
 =======
