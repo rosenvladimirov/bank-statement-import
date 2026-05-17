@@ -1,6 +1,8 @@
 # Copyright 2026 Rosen Vladimirov
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 
+from datetime import datetime
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -51,20 +53,54 @@ class AccountStatementImport(models.TransientModel):
         return super().import_file_button()
 
     def _l10n_bg_pull_from_provider(self):
-        """Тегли от свързания провайдер.  Периодът е по същата логика
-        като OCA cron-а (`_scheduled_pull`): от последния успешен pull
-        (или един интервал назад, ако още няма такъв) до сега.  Когато
-        queue_job е installed, `provider._pull` сам отлага реалното
-        теглене в background job (виж InfoPay bridge-а) и UI връща
-        моментално.
+        """Тегли от свързания провайдер.
+
+        Първо натискане за журнала (още няма извлечения) → **backfill**
+        от началото на текущата година + anchor-нати начално/крайно
+        салдо.  Следващи натискания (вече има извлечения) →
+        **incremental** от последното извлечение нататък, без populate
+        (OCA верижи balance_start от предходното).
+
+        Решението е по наличие на извлечения, НЕ по
+        ``last_successful_run`` — OCA го пише само при scheduled cron
+        (``_pull``: ``if is_scheduled``), ръчният бутон никога; това е
+        и същият сигнал като bridge-а (``has_prev``), за да се изравнят.
+
+        Когато queue_job е installed, ``provider._pull`` сам отлага
+        реалното теглене в background job (InfoPay bridge) и UI връща
+        моментално; populate флаговете оцеляват job serialization през
+        ``_job_prepare_context_before_enqueue_keys``.
         """
         self.ensure_one()
         provider = self.l10n_bg_provider_id
+        Statement = self.env["account.bank.statement"]
         date_until = fields.Datetime.now()
-        date_since = provider.last_successful_run or (
-            date_until - provider._get_next_run_period()
+        has_statements = bool(
+            Statement.search_count(
+                [("journal_id", "=", provider.journal_id.id)]
+            )
         )
-        provider._pull(date_since, date_until)
+        if has_statements:
+            last = Statement.search(
+                [("journal_id", "=", provider.journal_id.id)],
+                order="date desc",
+                limit=1,
+            )
+            date_since = provider.last_successful_run or datetime.combine(
+                last.date, datetime.min.time()
+            )
+            ctx = {}
+        else:
+            year = fields.Date.context_today(self).year
+            date_since = datetime(year, 1, 1)
+            # InfoPay bridge чете тези context флагове в
+            # _obtain_statement_data; за други провайдери са безвредни
+            # (просто игнорирани).
+            ctx = {
+                "l10n_bg_infopay_populate_balance_start": True,
+                "l10n_bg_infopay_populate_balance_end": True,
+            }
+        provider.with_context(**ctx)._pull(date_since, date_until)
         action = self.env["ir.actions.actions"]._for_xml_id(
             "account.action_bank_statement_tree"
         )
