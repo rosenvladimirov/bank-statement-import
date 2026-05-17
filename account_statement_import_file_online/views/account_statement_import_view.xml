@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<!--
+  Copyright 2026 Rosen Vladimirov
+  License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
+-->
+<odoo>
+    <record id="account_statement_import_form_online" model="ir.ui.view">
+        <field name="name">account.statement.import.form.online</field>
+        <field name="model">account.statement.import</field>
+        <field
+            name="inherit_id"
+            ref="account_statement_import_file.account_statement_import_form"
+        />
+        <field name="arch" type="xml">
+            <!-- помощно поле за модификаторите + инфо банер -->
+            <xpath expr="//field[@name='statement_file']" position="before">
+                <field name="l10n_bg_provider_id" invisible="1" />
+                <div
+                    class="alert alert-info"
+                    role="alert"
+                    invisible="not l10n_bg_provider_id"
+                >
+                    This journal is linked to an online statement provider
+                    (<field
+                        name="l10n_bg_provider_id"
+                        readonly="1"
+                        nolabel="1"
+                        class="oe_inline"
+                    />).
+                    No file needed — press <b>Import and View</b> to pull
+                    the statements from the provider.
+                </div>
+            </xpath>
+            <!-- угасваме file upload + текстовете при наличен провайдер -->
+            <xpath
+                expr="//field[@name='statement_file']"
+                position="attributes"
+            >
+                <attribute name="invisible">l10n_bg_provider_id</attribute>
+            </xpath>
+            <xpath expr="//h2" position="attributes">
+                <attribute name="invisible">l10n_bg_provider_id</attribute>
+            </xpath>
+            <xpath expr="//p" position="attributes">
+                <attribute name="invisible">l10n_bg_provider_id</attribute>
+            </xpath>
+            <xpath
+                expr="//ul[@id='statement_format']"
+                position="attributes"
+            >
+                <attribute name="invisible">l10n_bg_provider_id</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

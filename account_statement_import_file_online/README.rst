@@ -1,5 +1,5 @@
 =============================================
-Bank Statement Import: File → Online redirect
+Bank Statement Import: File → Online provider
 =============================================
 
 .. |badge1| image:: https://img.shields.io/badge/licence-AGPL--3-blue.png
@@ -11,34 +11,42 @@ Bank Statement Import: File → Online redirect
 Glue module between ``account_statement_import_file`` and
 ``account_statement_import_online``.
 
-When a bank journal has an **online statement provider** configured
-(e.g. InfoPay), the journal-dashboard *Import* entry no longer opens
-the file-upload wizard.  Instead it triggers a **direct pull** from the
-configured provider and shows the resulting bank statements.
+On the standard **file-import wizard** (``account.statement.import``),
+when the journal it was opened from has an **online statement
+provider** configured (e.g. InfoPay):
+
+* the file-upload field and the "supported formats" text are hidden;
+* an info banner shows which provider is linked;
+* the existing **Import and View** button pulls the statements from
+  that provider instead of parsing an uploaded file.
+
+The wizard still opens normally — nothing is bypassed; the operator
+simply sees that a provider is configured and presses *Import*.
 
 Behaviour
 =========
 
-``account.journal.import_account_statement()`` is overridden:
-
-* journal **with** ``online_bank_statement_provider_id`` → direct
-  ``provider._pull(date_since, date_until)`` where the period mirrors
-  the OCA scheduler (``_scheduled_pull``): from ``last_successful_run``
-  (or one ``_get_next_run_period()`` back if never run) up to *now*;
-* journal **without** a provider → unchanged OCA file-import wizard.
-
-No views, no new models — a pure method override.  ``auto_install`` —
-relevant only when both host modules are installed.
+* ``account.statement.import`` is extended with a computed
+  ``l10n_bg_provider_id`` (resolved from the ``journal_id`` context
+  key the dashboard button sets).
+* ``import_file_button()`` is overridden: with a provider → pull from
+  it (period mirrors the OCA scheduler ``_scheduled_pull``: from
+  ``last_successful_run`` — or one ``_get_next_run_period()`` back —
+  up to *now*); without a provider → unchanged file import (a clear
+  error is raised if no file was selected).
+* ``statement_file`` hard ``required`` is relaxed (validated
+  contextually) so the form can be submitted with no file when a
+  provider is used.
 
 Notes
 =====
 
-The direct pull does not open the pull wizard, so provider-specific
-opt-in flags (such as InfoPay's *populate opening/closing balance*
-checkboxes) are not set on this path — the statement chain starts from
-the previous statement's closing balance (or zero on a first run).
-Use the provider's own pull wizard when an anchored opening balance is
-required.
+The provider pull goes through ``provider._pull``; when ``queue_job``
+is installed the InfoPay bridge offloads it to a background job, so
+the wizard returns immediately and a toast reports progress.  This
+path does not set the provider's *populate opening/closing balance*
+opt-in flags — use the provider's own pull wizard when an anchored
+opening balance is required.
 
 Credits
 =======
